@@ -98,11 +98,11 @@ endif()
 set_property(GLOBAL PROPERTY USE_FOLDERS ON)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
-if(NOT MSVC)
+if(NOT MSVC AND NOT IOS)
 	add_compile_options(-Wformat -Werror=format-security)
 endif()
 
-if(NOT ANDROID)
+if(NOT ANDROID AND NOT IOS)
 	include(${CMAKE_SOURCE_DIR}/cmake/qt6.cmake)
 endif()
 
@@ -120,7 +120,10 @@ add_subdirectory(display)
 add_subdirectory(features)
 add_subdirectory(glutil)
 add_subdirectory(updater)
-if(NOT ANDROID)
+if (APPLE AND IOS)
+	add_subdirectory(gui-ios)
+endif()
+if(NOT ANDROID AND NOT IOS)
 	add_subdirectory(gui-qt)
 endif()
 add_subdirectory(gxm)
@@ -200,7 +203,12 @@ if(ANDROID)
 		set_target_properties(vita3k PROPERTIES LINK_FLAGS "${LIBS_TO_EXCLUDE_FLAG}")
 	endif()
 else()
-	add_executable(vita3k MACOSX_BUNDLE main.cpp interface.cpp interface.h performance.cpp)
+	if(APPLE AND IOS)
+		add_library(vita3k STATIC ios_bridge.cpp interface.cpp)
+		target_include_directories(vita3k PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+	else()
+		add_executable(vita3k MACOSX_BUNDLE main.cpp interface.cpp interface.h performance.cpp)
+	endif()
 endif()
 
 if(WIN32)
@@ -209,7 +217,10 @@ if(WIN32)
 endif()
 
 target_link_libraries(vita3k PRIVATE app audio compat config cppcommon ctrl dialog display ime lang gdbstub gxm io miniz modules motion packages patch renderer shader touch util psvpfsparser)
-if(NOT ANDROID)
+if(APPLE AND IOS)
+	target_link_libraries(vita3k PRIVATE libzRIF pugixml::pugixml)
+endif()
+if(NOT ANDROID AND NOT IOS)
 	target_link_libraries(vita3k PRIVATE gui-qt)
 endif()
 if(USE_DISCORD_RICH_PRESENCE)
@@ -220,7 +231,7 @@ if(LINUX)
 	target_link_libraries(vita3k PRIVATE -static-libgcc -static-libstdc++)
 endif()
 
-if(NOT ANDROID)
+if(NOT ANDROID AND NOT IOS)
 	file(GLOB VITA3K_QT_TS_FILES CONFIGURE_DEPENDS
 		"${CMAKE_SOURCE_DIR}/i18n/qt/*.ts")
 	set(VITA3K_QT_QM_DIR "${CMAKE_BINARY_DIR}/qt_translations")
@@ -255,14 +266,14 @@ endif()
 
 set_target_properties(vita3k PROPERTIES OUTPUT_NAME Vita3K)
 
-if(NOT ANDROID)
+if(NOT ANDROID AND NOT IOS)
 	set_target_properties(vita3k PROPERTIES
 		ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/lib"
 		LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/lib"
 		RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")
 endif()
 
-if(APPLE)
+if(APPLE AND NOT IOS)
 	add_custom_command(
 		OUTPUT Vita3K.icns
 		COMMAND mkdir -p Vita3K.iconset

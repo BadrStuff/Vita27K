@@ -17,7 +17,11 @@
 
 #include <cpu/disasm/functions.h>
 #include <cpu/functions.h>
+#if TARGET_OS_IPHONE
+#include <cpu/impl/unicorn_cpu.h>
+#else
 #include <cpu/impl/dynarmic_cpu.h>
+#endif
 #include <cpu/impl/interface.h>
 #include <cpu/state.h>
 #include <mem/ptr.h>
@@ -43,11 +47,21 @@ CPUStatePtr init_cpu(bool cpu_opt, SceUID thread_id, std::size_t processor_id, M
     state->mem = &mem;
     state->thread_id = thread_id;
 
+    state->halt_instruction = alloc_block(mem, 4, "halt_instruction");
+    const auto halt_ptr = state->halt_instruction.get_ptr<uint16_t>();
+    *halt_ptr.get(mem) = 0xBF00; // NOP
+    *(halt_ptr.get(mem) + 1) = 0xBF30; // WFI
+    state->halt_instruction_pc = state->halt_instruction.get() | 1;
+    
     if (!init(state->disasm)) {
         return CPUStatePtr();
     }
 
+#if TARGET_OS_IPHONE
+    state->cpu = std::make_unique<UnicornCPU>(state.get());
+#else
     state->cpu = std::make_unique<DynarmicCPU>(state.get(), processor_id, cpu_opt);
+#endif
 
     return state;
 }

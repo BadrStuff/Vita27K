@@ -21,7 +21,6 @@
 
 #include <cpu/common.h>
 #include <kernel/state.h>
-#include <mem/functions.h>
 
 #include <kernel/thread/thread_state.h>
 
@@ -91,13 +90,6 @@ bool KernelState::init(MemState &mem, const CallImportFunc &call_import, bool cp
     base_tick = { rtc_base_ticks() };
     this->call_import = call_import;
     this->cpu_opt = cpu_opt;
-
-    // Generate halt instruction (NOP + WFI)
-    halt_instruction = alloc_block(mem, 4, "halt_instruction");
-    const auto halt_ptr = halt_instruction.get_ptr<uint16_t>().get(mem);
-    halt_ptr[0] = 0xBF00; // NOP
-    halt_ptr[1] = 0xBF30; // WFI
-    halt_instruction_pc = halt_instruction.get() | 1; // thumb mode pc
 
     return true;
 }
@@ -310,9 +302,6 @@ void KernelState::deinit(MemState &mem) {
     thread_event_end_arg = 0;
 
     codec_blocks.clear();
-
-    halt_instruction = nullptr;
-    halt_instruction_pc = 0;
 
     process_param = nullptr;
     client_vtable = Ptr<void>(0);

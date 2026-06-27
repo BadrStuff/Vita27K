@@ -46,6 +46,10 @@ void reset_keyboard_bindings(Config &cfg);
  * \param root_paths Root location used throughout Vita3K.
  * \return Success for completion, QuitRequest if Help or Version is requested, otherwise Error.
  */
-ExitCode init_config(Config &cfg, int argc, char **argv, const Root &root_paths);
+#if TARGET_OS_IPHONE
+    ExitCode init_config(Config &cfg, int argc, char **argv, const Root &root_paths, fs::path new_path);
+#else
+    ExitCode init_config(Config &cfg, int argc, char **argv, const Root &root_paths);
+#endif
 
 } // namespace config

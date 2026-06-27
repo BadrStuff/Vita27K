@@ -31,6 +31,7 @@ bool is_physical_interface(const char *name) {
 // Get the primary network interface name using SystemConfiguration
 bool get_primary_interface_name(char *dest, size_t bufferSize) {
     bool success = false;
+#if TARGET_OS_OSX
     auto size = static_cast<CFIndex>(bufferSize);
 
     if (size < 0) [[unlikely]] // Overflow from size_t to CFIndex (practically unreachable)
@@ -63,6 +64,7 @@ bool get_primary_interface_name(char *dest, size_t bufferSize) {
     }
 
     CFRelease(store);
+#endif
     return success;
 }
 

@@ -263,7 +263,7 @@ void reset_keyboard_bindings(Config &cfg) {
 #undef RESET_KEYBOARD_BINDING
 }
 
-static ExitCode parse(Config &cfg, const fs::path &load_path, const fs::path &root_pref_path) {
+static ExitCode parse(Config &cfg, const fs::path &load_path, const fs::path &root_pref_path, fs::path new_path) {
     const auto loaded_path = check_path(load_path);
     if (loaded_path.empty() || !fs::exists(loaded_path)) {
         LOG_ERROR("Config file input path invalid (did you name the extension \".yml\"?)");
@@ -279,6 +279,10 @@ static ExitCode parse(Config &cfg, const fs::path &load_path, const fs::path &ro
         LOG_ERROR("Config file can't be loaded: Error: {}", exception.what());
         return FileNotFound;
     }
+
+#if TARGET_OS_IPHONE
+    cfg.set_pref_path(new_path);
+#endif
 
     if (cfg.pref_path.empty())
         cfg.set_pref_path(root_pref_path);
@@ -316,12 +320,16 @@ ExitCode serialize_config(Config &cfg, const fs::path &output_path) {
     return Success;
 }
 
+#if TARGET_OS_IPHONE
+ExitCode init_config(Config &cfg, int argc, char **argv, const Root &root_paths, fs::path new_path) {
+#else
 ExitCode init_config(Config &cfg, int argc, char **argv, const Root &root_paths) {
+#endif
     // Always generate the default configuration file
     Config command_line{};
     // Load config path configuration by default; otherwise, move the default to the config path
     if (fs::exists(check_path(root_paths.get_config_path()))) {
-        parse(cfg, root_paths.get_config_path(), root_paths.get_pref_path());
+        parse(cfg, root_paths.get_config_path(), root_paths.get_pref_path(), new_path);
     } else {
         serialize_config(command_line, check_path(root_paths.get_config_path()));
     }
@@ -432,7 +440,7 @@ ExitCode init_config(Config &cfg, int argc, char **argv, const Root &root_paths)
         if (command_line.config_path.empty()) {
             command_line.config_path = root_paths.get_config_path();
         } else {
-            if (parse(command_line, command_line.config_path, root_paths.get_pref_path()) != Success)
+            if (parse(command_line, command_line.config_path, root_paths.get_pref_path(), new_path) != Success)
                 return InitConfigFailed;
         }
     }

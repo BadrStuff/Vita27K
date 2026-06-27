@@ -12,6 +12,14 @@ src/cpu.cpp
 src/dynarmic_cpu.cpp
 )
 
+if(APPLE AND IOS)
+    list(APPEND SOURCE_LIST
+        include/cpu/impl/unicorn_cpu.h
+
+        src/unicorn_cpu.cpp
+    )
+endif()
+
 add_library(
 cpu
 STATIC
@@ -23,3 +31,6 @@ source_group(TREE ${CMAKE_CURRENT_SOURCE_DIR} FILES ${SOURCE_LIST})
 target_include_directories(cpu PUBLIC include)
 target_link_libraries(cpu PUBLIC mem util)
 target_link_libraries(cpu PRIVATE dynarmic capstone merry::mcl)
+if(APPLE AND IOS)
+    target_link_libraries(cpu PRIVATE unicorn)
+endif()

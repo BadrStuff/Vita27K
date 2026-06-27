@@ -87,3 +87,9 @@
 [submodule "external/substitute"]
 	path = external/substitute
 	url = https://github.com/Vita3K/substitute.git
+[submodule "external/ffmpeg-ios"]
+	path = external/ffmpeg-ios
+	url = https://github.com/jarrodnorwell/ffmpeg-core
+[submodule "external/unicorn"]
+	path = external/unicorn
+	url = https://github.com/jarrodnorwell/unicorn
