@@ -1,20 +1,15 @@
-# Vita3K
+# Vita27K
 
 [![C/C++ CI](https://github.com/Vita3K/Vita3K/actions/workflows/c-cpp.yml/badge.svg)](https://github.com/Vita3K/Vita3K/actions/workflows/c-cpp.yml)
 [![Release](https://img.shields.io/github/v/release/Vita3K/Vita3K-builds?include_prereleases)](https://github.com/Vita3K/Vita3K/releases)
-[![Vita3K discord server](https://img.shields.io/discord/408916678911459329?color=5865F2&label=Vita3K%20&logo=discord&logoColor=white)](https://discord.gg/6aGwQzh)
 
 ## Introduction
 
-Vita3K is an experimental PlayStation Vita emulator for Windows, Linux, macOS and Android.
-
-* [Website](https://vita3k.org/) (information for users)
-* [Wiki](https://github.com/Vita3K/Vita3K/wiki) (information for developers)
-* [Discord server](https://discord.gg/MaWhJVH) (recommended)
+Vita27K is an experimental fork of the Vion and Vita3K emulator ported to iOS with JIT support.
 
 ## Compatibility
 
-The emulator currently runs most homebrew programs and commercial games.
+The emulator currently runs most homebrew programs and commercial games supported by the 2 apps listed above.
 
 - [Homebrew compatibility page](https://vita3k.org/compatibility-homebrew.html)
 - [Commercial compatibility page](https://vita3k.org/compatibility.html)
@@ -35,46 +30,28 @@ The emulator currently runs most homebrew programs and commercial games.
 
 ## License
 
-Vita3K is licensed under the **GPLv2** license. This is largely dictated by external dependencies, most notably Unicorn.
+Vita27K is licensed under the **GPLv2** license. This is largely dictated by external dependencies, most notably Unicorn.
 
 ## Downloads
 
-You can download the latest builds from [here](https://github.com/Vita3K/Vita3K/releases/tag/continuous).
+You can download the latest builds from [here](https://github.com/BadrStuff/Vita27K/releases).
 
-* Windows
+* iOS
   * Requirements:
-    * [Microsoft Visual C++ 2015-2022 Redistributable](https://aka.ms/vs/17/release/vc_redist.x64.exe)
-* Linux
-  * Arch based:
-    * [vita3k-bin](https://aur.archlinux.org/packages/vita3k-bin)<sup><small>AUR</small></sup>
-    * [vita3k-git](https://aur.archlinux.org/packages/vita3k-git)<sup><small>AUR</small></sup>
-  * Requirements:
-    * xdg-desktop-portal
-* [Android](https://github.com/Vita3K/Vita3K-Android/releases/)
-    * [Adreno drivers](https://github.com/K11MCH1/AdrenoToolsDrivers/releases/)
-* Others
-  * [Download Artifact](https://github.com/Vita3K/Vita3K/actions?query=event%3Apush+is%3Asuccess+branch%3Amaster)
-  * [Old builds](https://github.com/Vita3K/Vita3K-builds/releases)
+    * A sideload-ready or a jailbreaked iPhone (iOS 18+)
 
 ## Building
 
 Please see [`building.md`](./building.md).
 
 ## Running
-Check our [quickstart guide](https://vita3k.org/quickstart) to make sure your computer meets the minimum requirements to run Vita3K.  
-Don't forget to have your graphics driver up to date and to install the [Visual C++ 2015-2022 Redistributable](https://aka.ms/vs/17/release/VC_redist.x64.exe) if you are a Windows user.  
+Check the device's iOS version and make sure your device meets the minimum requirements to run Vita27K. I'd suggest at least an iPhone XR, XS, or XS Max as they support iOS 18.
 
 ## Bugs and issues
-The project is in an early stage, so please be mindful when opening new issues. Expect crashes, glitches, low compatibility and poor performance.
+The project is in a very early stage, so please be mindful when opening new issues. Expect crashes, glitches, low compatibility and poor performance.
 
 ## Thanks
-Thanks go out to people who offered advice or otherwise made this project possible, such as Davee, korruptor, Rinnegatamante, ScHlAuChi, Simon Kilroy, TheFlow, xerpi, xyz, Yifan Lu and many others.
-
-## Donations
-[![ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/vita3k)
-<br>
-Thank you to the supporters and to all those who support us on our [ko-fi](https://ko-fi.com/vita3K).
-* Among them, those who subscribed to the Nibble Tier and upper: **j0hnnybrav0, Mored4u, TacoOblivion, Undeadbob and uplush**
+Thanks to people who made this project possible, such as the Vita3K devs and the Vion dev.
 
 ## Note
 The purpose of this emulator is not to enable illegal activity. You can dump games from a Vita by using [NoNpDrm](https://github.com/TheOfficialFloW/NoNpDrm) or [FAGDec](https://github.com/CelesteBlue-dev/PSVita-RE-tools/tree/master/FAGDec/build). You can get homebrew programs from [VitaDB](https://www.rinnegatamante.eu/vitadb/#/).
