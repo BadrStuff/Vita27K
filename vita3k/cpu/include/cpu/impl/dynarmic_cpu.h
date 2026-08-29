@@ -50,6 +50,9 @@ class DynarmicCPU : public CPUInterface {
 public:
     DynarmicCPU(CPUState *state, std::size_t processor_id, bool cpu_opt);
     ~DynarmicCPU() override;
+
+    [[nodiscard]] bool is_jit_valid() const { return jit != nullptr; }
+
     int run() override;
     void stop() override;
 
