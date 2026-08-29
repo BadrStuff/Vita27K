@@ -31,6 +31,11 @@
 #include <optional>
 #include <string>
 
+#if defined(__APPLE__) && defined(__aarch64__)
+#include <sys/mman.h>
+#include <unistd.h>
+#endif
+
 class ArmDynarmicCP15 : public Dynarmic::A32::Coprocessor {
     uint32_t tpidruro;
     uint32_t sctlr;
@@ -266,7 +271,7 @@ public:
     }
 
     bool MemoryWriteExclusive64(Dynarmic::A32::VAddr addr, uint64_t value, uint64_t expected) override {
-        return MemoryWriteExclusive(addr, value, expected); // Ptr<uint64_t>(addr).atomic_compare_and_swap(*parent->mem, value, expected);
+        return MemoryWriteExclusive(addr, value, expected);
     }
 
     void InterpreterFallback(Dynarmic::A32::VAddr addr, size_t num_insts) override {
@@ -277,7 +282,7 @@ public:
         switch (exception) {
         case Dynarmic::A32::Exception::Breakpoint: {
             cpu->break_ = true;
-            cpu->jit->HaltExecution();
+            if (cpu->jit) cpu->jit->HaltExecution();
             if (cpu->is_thumb_mode())
                 cpu->set_pc(pc | 1);
             else
@@ -286,7 +291,7 @@ public:
         }
         case Dynarmic::A32::Exception::WaitForInterrupt: {
             cpu->halted = true;
-            cpu->jit->HaltExecution();
+            if (cpu->jit) cpu->jit->HaltExecution();
             break;
         }
         case Dynarmic::A32::Exception::PreloadDataWithIntentToWrite:
@@ -320,7 +325,7 @@ public:
     void CallSVC(uint32_t svc) override {
         parent->svc_called = true;
         parent->svc = svc;
-        cpu->jit->HaltExecution(Dynarmic::HaltReason::UserDefined8);
+        if (cpu->jit) cpu->jit->HaltExecution(Dynarmic::HaltReason::UserDefined8);
     }
 
     void AddTicks(uint64_t ticks) override {}
@@ -333,24 +338,42 @@ public:
 Dynarmic::ExclusiveMonitor DynarmicCPU::shared_monitor(MAX_CORE_COUNT);
 
 std::unique_ptr<Dynarmic::A32::Jit> DynarmicCPU::make_jit() {
-    Dynarmic::A32::UserConfig config{};
-    config.arch_version = Dynarmic::A32::ArchVersion::v7;
-    config.callbacks = cb.get();
-    if (parent->mem->use_page_table) {
-        config.page_table = (log_mem || !cpu_opt) ? nullptr : reinterpret_cast<decltype(config.page_table)>(parent->mem->page_table.get());
-        config.absolute_offset_page_table = true;
-    } else if (!log_mem && cpu_opt) {
-        config.fastmem_pointer = std::bit_cast<uintptr_t>(parent->mem->memory.get());
+#if defined(__APPLE__) && defined(__aarch64__)
+    const size_t page_size = sysconf(_SC_PAGESIZE);
+    void* test_ptr = mmap(NULL, page_size, PROT_READ | PROT_WRITE | PROT_EXEC, MAP_ANON | MAP_PRIVATE, -1, 0);
+    if (test_ptr == MAP_FAILED) {
+        LOG_ERROR("[Vita27K] iOS RWX memory permission denied (No JIT entitlement/debugger attached).");
+        return nullptr;
     }
-    config.hook_hint_instructions = true;
-    config.enable_cycle_counting = false;
-    config.global_monitor = &shared_monitor;
-    config.coprocessors[15] = cp15;
-    config.processor_id = core_id;
-    config.optimizations = cpu_opt ? Dynarmic::all_safe_optimizations : Dynarmic::no_optimizations;
-    config.enable_cycle_counting = false;
+    munmap(test_ptr, page_size);
+#endif
 
-    return std::make_unique<Dynarmic::A32::Jit>(config);
+    try {
+        Dynarmic::A32::UserConfig config{};
+        config.arch_version = Dynarmic::A32::ArchVersion::v7;
+        config.callbacks = cb.get();
+        if (parent->mem->use_page_table) {
+            config.page_table = (log_mem || !cpu_opt) ? nullptr : reinterpret_cast<decltype(config.page_table)>(parent->mem->page_table.get());
+            config.absolute_offset_page_table = true;
+        } else if (!log_mem && cpu_opt) {
+            config.fastmem_pointer = std::bit_cast<uintptr_t>(parent->mem->memory.get());
+        }
+        config.hook_hint_instructions = true;
+        config.enable_cycle_counting = false;
+        config.global_monitor = &shared_monitor;
+        config.coprocessors[15] = cp15;
+        config.processor_id = core_id;
+        config.optimizations = cpu_opt ? Dynarmic::all_safe_optimizations : Dynarmic::no_optimizations;
+        config.enable_cycle_counting = false;
+
+        return std::make_unique<Dynarmic::A32::Jit>(config);
+    } catch (const std::exception& e) {
+        LOG_ERROR("[Vita27K] Dynarmic JIT Exception: {}", e.what());
+        return nullptr;
+    } catch (...) {
+        LOG_ERROR("[Vita27K] Unknown exception during Dynarmic JIT allocation.");
+        return nullptr;
+    }
 }
 
 DynarmicCPU::DynarmicCPU(CPUState *state, std::size_t processor_id, bool cpu_opt)
@@ -360,6 +383,9 @@ DynarmicCPU::DynarmicCPU(CPUState *state, std::size_t processor_id, bool cpu_opt
     , core_id(processor_id)
     , cpu_opt(cpu_opt) {
     jit = make_jit();
+    if (!jit) {
+        LOG_WARN("[Vita27K] DynarmicCPU initialized WITHOUT JIT backend. Fallback mode active.");
+    }
 }
 
 DynarmicCPU::~DynarmicCPU() = default;
@@ -368,6 +394,13 @@ int DynarmicCPU::run() {
     halted = false;
     break_ = false;
     parent->svc_called = false;
+
+    if (!jit) {
+        LOG_ERROR_ONCE("[Vita27K] Dynarmic JIT is unavailable. Halting CPU thread execution.");
+        halted = true;
+        return halted;
+    }
+
     Dynarmic::HaltReason halt_reason;
     do {
         halt_reason = jit->Run();
@@ -378,7 +411,9 @@ int DynarmicCPU::run() {
 
 int DynarmicCPU::step() {
     parent->svc_called = false;
-    jit->Step();
+    if (jit) {
+        jit->Step();
+    }
     return 0;
 }
 
@@ -416,27 +451,29 @@ bool DynarmicCPU::get_log_mem() {
 }
 
 void DynarmicCPU::stop() {
-    jit->HaltExecution();
+    if (jit) {
+        jit->HaltExecution();
+    }
 }
 
 uint32_t DynarmicCPU::get_reg(uint8_t idx) {
-    return jit->Regs()[idx];
+    return jit ? jit->Regs()[idx] : 0;
 }
 
 uint32_t DynarmicCPU::get_sp() {
-    return jit->Regs()[13];
+    return jit ? jit->Regs()[13] : 0;
 }
 
 uint32_t DynarmicCPU::get_pc() {
-    return jit->Regs()[15];
+    return jit ? jit->Regs()[15] : 0;
 }
 
 void DynarmicCPU::set_reg(uint8_t idx, uint32_t val) {
-    jit->Regs()[idx] = val;
+    if (jit) jit->Regs()[idx] = val;
 }
 
 void DynarmicCPU::set_cpsr(uint32_t val) {
-    jit->SetCpsr(val);
+    if (jit) jit->SetCpsr(val);
 }
 
 uint32_t DynarmicCPU::get_tpidruro() {
@@ -455,62 +492,65 @@ void DynarmicCPU::set_pc(uint32_t val) {
         set_cpsr(get_cpsr() & 0xFFFFFFDF);
         val = val & 0xFFFFFFFC;
     }
-    jit->Regs()[15] = val;
+    if (jit) jit->Regs()[15] = val;
 }
 
 void DynarmicCPU::set_lr(uint32_t val) {
-    jit->Regs()[14] = val;
+    if (jit) jit->Regs()[14] = val;
 }
 
 void DynarmicCPU::set_sp(uint32_t val) {
-    jit->Regs()[13] = val;
+    if (jit) jit->Regs()[13] = val;
 }
 
 uint32_t DynarmicCPU::get_cpsr() {
-    return jit->Cpsr();
+    return jit ? jit->Cpsr() : 0;
 }
 
 uint32_t DynarmicCPU::get_fpscr() {
-    return jit->Fpscr();
+    return jit ? jit->Fpscr() : 0;
 }
 
 void DynarmicCPU::set_fpscr(uint32_t val) {
-    jit->SetFpscr(val);
+    if (jit) jit->SetFpscr(val);
 }
 
 CPUContext DynarmicCPU::save_context() {
-    CPUContext ctx;
-    ctx.cpu_registers = jit->Regs();
-    static_assert(sizeof(ctx.fpu_registers) == sizeof(jit->ExtRegs()));
-    memcpy(ctx.fpu_registers.data(), jit->ExtRegs().data(), sizeof(ctx.fpu_registers));
-    ctx.fpscr = jit->Fpscr();
-    ctx.cpsr = jit->Cpsr();
-
+    CPUContext ctx{};
+    if (jit) {
+        ctx.cpu_registers = jit->Regs();
+        static_assert(sizeof(ctx.fpu_registers) == sizeof(jit->ExtRegs()));
+        memcpy(ctx.fpu_registers.data(), jit->ExtRegs().data(), sizeof(ctx.fpu_registers));
+        ctx.fpscr = jit->Fpscr();
+        ctx.cpsr = jit->Cpsr();
+    }
     return ctx;
 }
 
 void DynarmicCPU::load_context(const CPUContext &ctx) {
-    jit->Regs() = ctx.cpu_registers;
-    static_assert(sizeof(ctx.fpu_registers) == sizeof(jit->ExtRegs()));
-    memcpy(jit->ExtRegs().data(), ctx.fpu_registers.data(), sizeof(ctx.fpu_registers));
-    jit->SetCpsr(ctx.cpsr);
-    jit->SetFpscr(ctx.fpscr);
+    if (jit) {
+        jit->Regs() = ctx.cpu_registers;
+        static_assert(sizeof(ctx.fpu_registers) == sizeof(jit->ExtRegs()));
+        memcpy(jit->ExtRegs().data(), ctx.fpu_registers.data(), sizeof(ctx.fpu_registers));
+        jit->SetCpsr(ctx.cpsr);
+        jit->SetFpscr(ctx.fpscr);
+    }
 }
 
 uint32_t DynarmicCPU::get_lr() {
-    return jit->Regs()[14];
+    return jit ? jit->Regs()[14] : 0;
 }
 
 float DynarmicCPU::get_float_reg(uint8_t idx) {
-    return std::bit_cast<float>(jit->ExtRegs()[idx]);
+    return jit ? std::bit_cast<float>(jit->ExtRegs()[idx]) : 0.0f;
 }
 
 void DynarmicCPU::set_float_reg(uint8_t idx, float val) {
-    jit->ExtRegs()[idx] = std::bit_cast<uint32_t>(val);
+    if (jit) jit->ExtRegs()[idx] = std::bit_cast<uint32_t>(val);
 }
 
 bool DynarmicCPU::is_thumb_mode() {
-    return jit->Cpsr() & 0x20;
+    return jit ? (jit->Cpsr() & 0x20) : false;
 }
 
 std::size_t DynarmicCPU::processor_id() const {
@@ -518,7 +558,7 @@ std::size_t DynarmicCPU::processor_id() const {
 }
 
 void DynarmicCPU::invalidate_jit_cache(Address start, size_t length) {
-    jit->InvalidateCacheRange(start, length);
+    if (jit) jit->InvalidateCacheRange(start, length);
 }
 
 void DynarmicCPU::clear_exclusive() {
