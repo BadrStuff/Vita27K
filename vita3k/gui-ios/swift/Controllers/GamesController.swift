@@ -1,8 +1,7 @@
 //
 //  GamesController.swift
-//  Vion
+//  Vita27K
 //
-//  Created by Jarrod Norwell on 7/5/2026.
 //
 
 import UIKit
@@ -77,7 +76,7 @@ class GamesController : UICollectionViewController {
                     ])
                 ]))/*,
                 UIBarButtonItem(image: UIImage(systemName: "ellipsis"), menu: UIMenu(preferredElementSize: .medium, children: [
-                    UIAction(title: "About Vion", image: UIImage(systemName: "info")) { action in
+                    UIAction(title: "About Vita27K", image: UIImage(systemName: "info")) { action in
                         
                     },
                     UIAction(title: "Exit", image: UIImage(systemName: "xmark"), attributes: .destructive) { action in
