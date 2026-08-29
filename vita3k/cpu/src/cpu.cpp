@@ -17,14 +17,12 @@
 
 #include <cpu/disasm/functions.h>
 #include <cpu/functions.h>
-#if TARGET_OS_IPHONE
-#include <cpu/impl/unicorn_cpu.h>
-#else
 #include <cpu/impl/dynarmic_cpu.h>
-#endif
+#include <cpu/impl/unicorn_cpu.h>
 #include <cpu/impl/interface.h>
 #include <cpu/state.h>
 #include <mem/ptr.h>
+#include <util/log.h>
 #include <util/types.h>
 
 #include <memory>
@@ -52,13 +50,23 @@ CPUStatePtr init_cpu(bool cpu_opt, SceUID thread_id, std::size_t processor_id, M
     *halt_ptr.get(mem) = 0xBF00; // NOP
     *(halt_ptr.get(mem) + 1) = 0xBF30; // WFI
     state->halt_instruction_pc = state->halt_instruction.get() | 1;
-    
+
     if (!init(state->disasm)) {
         return CPUStatePtr();
     }
 
 #if TARGET_OS_IPHONE
-    state->cpu = std::make_unique<UnicornCPU>(state.get());
+    // Attempt Dynarmic JIT initialization first on iOS
+    auto dynarmic_backend = std::make_unique<DynarmicCPU>(state.get(), processor_id, cpu_opt);
+    
+    // Check if JIT memory allocation failed (make_jit returned nullptr)
+    if (!dynarmic_backend->is_jit_valid()) {
+        LOG_WARN("[Vita27K] Dynarmic JIT unavailable on iOS. Dynamic CPU fallback triggered -> Switching to Unicorn Interpreter.");
+        state->cpu = std::make_unique<UnicornCPU>(state.get());
+    } else {
+        LOG_INFO("[Vita27K] Dynarmic JIT successfully initialized on iOS.");
+        state->cpu = std::move(dynarmic_backend);
+    }
 #else
     state->cpu = std::make_unique<DynarmicCPU>(state.get(), processor_id, cpu_opt);
 #endif
