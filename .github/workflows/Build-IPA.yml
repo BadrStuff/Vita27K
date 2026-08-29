@@ -1,0 +1,61 @@
+name: Build Unsigned iOS IPA
+
+on:
+  push:
+    branches: [ "main", "master" ]
+  pull_request:
+    branches: [ "main", "master" ]
+  workflow_dispatch:
+
+jobs:
+  build-unsigned-ipa:
+    runs-on: macos-14
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install Build Dependencies
+        run: |
+          brew install cmake ninja pkg-config
+
+      - name: Configure CMake for iOS
+        run: |
+          cmake -B build -G Ninja \
+            -DCMAKE_SYSTEM_NAME=iOS \
+            -DCMAKE_OSX_SYSROOT=iphoneos \
+            -DCMAKE_OSX_ARCHITECTURES=arm64 \
+            -DCMAKE_SYSTEM_VERSION=15.0 \
+            -DCMAKE_XCODE_ATTRIBUTE_CODE_SIGNING_ALLOWED=NO \
+            -DCMAKE_XCODE_ATTRIBUTE_CODE_SIGNING_REQUIRED=NO \
+            -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build Target
+        run: |
+          cmake --build build --config Release
+
+      - name: Create Unsigned IPA Package
+        run: |
+          mkdir -p Payload
+          
+          # Find the generated .app bundle in the build directory
+          APP_PATH=$(find build -name "*.app" -type d | head -n 1)
+          
+          if [ -z "$APP_PATH" ]; then
+            echo "Error: .app bundle not found!"
+            exit 1
+          fi
+          
+          echo "Found bundle at: $APP_PATH"
+          cp -R "$APP_PATH" Payload/
+          
+          # Zip the Payload directory into an .ipa file
+          zip -r Vita3K-unsigned.ipa Payload
+
+      - name: Upload IPA Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Vita27K-Unsigned-IPA
+          path: Vita27K-unsigned.ipa
