@@ -30,6 +30,10 @@ class GamesController : UICollectionViewController {
     
     override func viewDidLoad() {
         super.viewDidLoad()
+        
+        // JIT Status Check on view load
+        checkAndWarnJITStatus()
+
         if let navigationController {
             navigationController.navigationBar.prefersLargeTitles = true
         }
@@ -74,15 +78,7 @@ class GamesController : UICollectionViewController {
                             self.alertForLicenseInstallation()
                         }
                     ])
-                ]))/*,
-                UIBarButtonItem(image: UIImage(systemName: "ellipsis"), menu: UIMenu(preferredElementSize: .medium, children: [
-                    UIAction(title: "About Vita27K", image: UIImage(systemName: "info")) { action in
-                        
-                    },
-                    UIAction(title: "Exit", image: UIImage(systemName: "xmark"), attributes: .destructive) { action in
-                        
-                    }
-                ]))*/
+                ]))
             ])
         ]
         navigationItem.style = .browser
@@ -91,7 +87,6 @@ class GamesController : UICollectionViewController {
             navigationItem.subtitle = navigationItem.largeSubtitle
         }
         view.backgroundColor = .systemBackground
-        
         
         collectionView.alwaysBounceVertical = true
         collectionView.refreshControl = UIRefreshControl(
@@ -140,6 +135,33 @@ class GamesController : UICollectionViewController {
         }
     }
     
+    // MARK: - JIT Verification (DelphiniOS Style)
+    
+    /// Dynamic check using RWX mmap memory page allocation test
+    private func isJITEnabled() -> Bool {
+        let pageSize = sysconf(_SC_PAGESIZE)
+        let result = mmap(nil, pageSize, PROT_READ | PROT_WRITE | PROT_EXEC, MAP_ANON | MAP_PRIVATE, -1, 0)
+        if result != MAP_FAILED {
+            munmap(result, pageSize)
+            return true
+        }
+        return false
+    }
+
+    private func checkAndWarnJITStatus() {
+        if !isJITEnabled() {
+            print("[Vita27K Warning] JIT is not active. Falling back to interpreter.")
+        } else {
+            print("[Vita27K Info] JIT dynamic compilation available!")
+        }
+    }
+
+    private func launchGame(_ item: Game) {
+        let emulationController: EmulationController = EmulationController(titleId: item.details.path)
+        emulationController.modalPresentationStyle = .fullScreen
+        present(emulationController, animated: true)
+    }
+
     func populate() async {
         guard let dataSource, var snapshot else {
             return
@@ -178,9 +200,21 @@ class GamesController : UICollectionViewController {
             return
         }
         
-        let emulationController: EmulationController = EmulationController(titleId: item.details.path)
-        emulationController.modalPresentationStyle = .fullScreen
-        present(emulationController, animated: true)
+        // DelphiniOS-style check before presenting EmulationController
+        if !isJITEnabled() {
+            let alert = UIAlertController(
+                title: "JIT Disabled",
+                message: "Vita27K requires JIT to deliver playable framerates. Running without JIT will cause heavy lag and low FPS.\n\nAttach via StikDebug, AltStore, or SideStore to enable JIT.",
+                preferredStyle: .alert
+            )
+            alert.addAction(UIAlertAction(title: "Launch Anyway (Slow)", style: .destructive) { _ in
+                self.launchGame(item)
+            })
+            alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
+            present(alert, animated: true)
+        } else {
+            launchGame(item)
+        }
     }
 }
 
@@ -206,7 +240,6 @@ extension GamesController {
         openDocumentPickerForInstall()
     }
     
-    // TODO: clean this up... wow it's bad
     func installPackagePKGs(_ urls: [URL]) {
         Thread.detachNewThread {
             for url in urls {
@@ -268,7 +301,6 @@ extension GamesController {
         openDocumentPickerForInstall()
     }
     
-    // TODO: clean this up... wow it's bad
     func installPackageZIPVPKs(_ urls: [URL]) {
         Thread.detachNewThread {
             for url in urls {
